@@ -5,8 +5,22 @@
 #define MQTT_attr "espaltherma/ATTR"
 #define MQTT_lwt "espaltherma/LWT"
 
-#define EEPROM_CHK 1
-#define EEPROM_STATE 0
+#define EEPROM_CHK 0
+#define EEPROM_CHK_VAL 'X'
+
+// #define LOG_DEBUG 1 
+
+#ifdef PIN_THERM_MAIN
+#define EEPROM_STATE_MAIN 1
+#endif
+
+#ifdef PIN_THERM_ADD
+#define EEPROM_STATE_ADD 2
+#endif
+
+#ifdef PIN_THERM
+#define EEPROM_STATE 3
+#endif
 
 #define MQTT_attr "espaltherma/ATTR"
 #define MQTT_lwt "espaltherma/LWT"
@@ -43,25 +57,46 @@ void sendValues()
 #endif
 }
 
-void saveEEPROM(uint8_t state){
-    EEPROM.write(EEPROM_STATE,state);
-    EEPROM.commit();
-}
-
 void readEEPROM(){
-  if ('R' == EEPROM.read(EEPROM_CHK)){
+  if (EEPROM_CHK_VAL == EEPROM.read(EEPROM_CHK)){
+  
+  #ifdef PIN_THERM
     digitalWrite(PIN_THERM,EEPROM.read(EEPROM_STATE));
-    mqttSerial.printf("Restoring previous state: %s",(EEPROM.read(EEPROM_STATE) == HIGH)? "Off":"On" );
+    mqttSerial.printf("Restoring previous THERM state: %s",(EEPROM.read(EEPROM_STATE) == HIGH)? "Off":"On" );
+  #endif
+
+  #ifdef PIN_THERM_MAIN
+    digitalWrite(PIN_THERM_MAIN,EEPROM.read(EEPROM_STATE_MAIN));
+    mqttSerial.printf("Restoring previous THERM_MAIN state: %s",(EEPROM.read(EEPROM_STATE_MAIN) == HIGH)? "On":"Off" );
+  #endif
+
+  #ifdef PIN_THERM_ADD
+    digitalWrite(PIN_THERM_ADD,EEPROM.read(EEPROM_STATE_ADD));
+    mqttSerial.printf("Restoring previous THERM_ADD state: %s",(EEPROM.read(EEPROM_STATE_ADD) == HIGH)? "On":"Off" );
+  #endif
+
   }
   else{
     mqttSerial.printf("EEPROM not initialized (%d). Initializing...",EEPROM.read(EEPROM_CHK));
-    EEPROM.write(EEPROM_CHK,'R');
+    EEPROM.write(EEPROM_CHK,EEPROM_CHK_VAL);
+  #ifdef PIN_THERM
     EEPROM.write(EEPROM_STATE,HIGH);
-    EEPROM.commit();
     digitalWrite(PIN_THERM,HIGH);
+  #endif
+  #ifdef PIN_THERM_MAIN
+    EEPROM.write(EEPROM_STATE_MAIN,HIGH);
+    digitalWrite(PIN_THERM_MAIN,HIGH);
+  #endif
+  #ifdef PIN_THERM_ADD
+    EEPROM.write(EEPROM_STATE_ADD,HIGH);
+    digitalWrite(PIN_THERM_ADD,HIGH);
+  #endif
+    EEPROM.commit();
   }
 }
 
+#define AVAILABILITY "\"availability\":[{\"topic\":\"espaltherma/LWT\",\"payload_available\":\"Online\",\"payload_not_available\":\"Offline\"}],\"availability_mode\":\"all\"" 
+#define DEVICE_ID "\"device\":{\"identifiers\":[\"ESPAltherma\"]}"
 void reconnectMqtt()
 {
   // Loop until we're reconnected
@@ -75,16 +110,48 @@ void reconnectMqtt()
       Serial.println("connected!");
       client.publish("homeassistant/sensor/espAltherma/config", "{\"name\":\"AlthermaSensors\",\"stat_t\":\"~/LWT\",\"avty_t\":\"~/LWT\",\"pl_avail\":\"Online\",\"pl_not_avail\":\"Offline\",\"uniq_id\":\"espaltherma\",\"device\":{\"identifiers\":[\"ESPAltherma\"]}, \"~\":\"espaltherma\",\"json_attr_t\":\"~/ATTR\"}", true);
       client.publish(MQTT_lwt, "Online", true);
+
+#ifdef PIN_THERM
       client.publish("homeassistant/switch/espAltherma/config", "{\"name\":\"Altherma\",\"cmd_t\":\"~/POWER\",\"stat_t\":\"~/STATE\",\"pl_off\":\"OFF\",\"pl_on\":\"ON\",\"~\":\"espaltherma\"}", true);
 
       // Subscribe
       client.subscribe("espaltherma/POWER");
+#endif
+
+#ifdef PIN_THERM_MAIN
+      mqttSerial.print("Configuring HA switch for thermMain");
+      client.publish("homeassistant/switch/espAltherma/thermMain/config", "{" AVAILABILITY "," DEVICE_ID ",\"unique_id\":\"AlthermaMainZone\",\"name\":\"AlthermaMainZone\",\"cmd_t\":\"~/thermMain/set\",\"stat_t\":\"~/thermMain/state\",\"pl_off\":\"OFF\",\"pl_on\":\"ON\",\"~\":\"espaltherma\",\"q\": 1 }", true);
+      client.subscribe("espaltherma/thermMain/set");
+#endif
+
+#ifdef PIN_THERM_ADD
+      mqttSerial.print("Configuring HA switch for thermAdd");
+      client.publish("homeassistant/switch/espAltherma/thermAdd/config", "{" AVAILABILITY "," DEVICE_ID ",\"unique_id\":\"AlthermaAddZone\",\"name\":\"AlthermaAdditionalZone\",\"cmd_t\":\"~/thermAdd/set\",\"stat_t\":\"~/thermAdd/state\",\"pl_off\":\"OFF\",\"pl_on\":\"ON\",\"~\":\"espaltherma\",\"q\": 1 }", true);
+      client.subscribe("espaltherma/thermAdd/set");
+#endif
+
 #ifdef PIN_SG1
       // Smart Grid
-      client.publish("homeassistant/select/espAltherma/sg/config", "{\"availability\":[{\"topic\":\"espaltherma/LWT\",\"payload_available\":\"Online\",\"payload_not_available\":\"Offline\"}],\"availability_mode\":\"all\",\"unique_id\":\"espaltherma_sg\",\"device\":{\"identifiers\":[\"ESPAltherma\"],\"manufacturer\":\"ESPAltherma\",\"model\":\"M5StickC PLUS ESP32-PICO\",\"name\":\"ESPAltherma\"},\"icon\":\"mdi:solar-power\",\"name\":\"EspAltherma Smart Grid\",\"command_topic\":\"espaltherma/sg/set\",\"command_template\":\"{% if value == 'Free Running' %} 0 {% elif value == 'Forced Off' %} 1 {% elif value == 'Recommended On' %} 2 {% elif value == 'Forced On' %} 3 {% else %} 0 {% endif %}\",\"options\":[\"Free Running\",\"Forced Off\",\"Recommended On\",\"Forced On\"],\"state_topic\":\"espaltherma/sg/state\",\"value_template\":\"{% set mapper = { '0':'Free Running', '1':'Forced Off', '2':'Recommended On', '3':'Forced On' } %} {% set word = mapper[value] %} {{ word }}\"}", true);
+      client.publish("homeassistant/select/espAltherma/sg/config", "{" AVAILABILITY ",\"unique_id\":\"espaltherma_sg\",\"device\":{\"identifiers\":[\"ESPAltherma\"],\"manufacturer\":\"ESPAltherma\",\"model\":\"M5StickC PLUS ESP32-PICO\",\"name\":\"ESPAltherma\"},\"icon\":\"mdi:solar-power\",\"name\":\"EspAltherma Smart Grid\",\"command_topic\":\"espaltherma/sg/set\",\"command_template\":\"{% if value == 'Free Running' %} 0 {% elif value == 'Forced Off' %} 1 {% elif value == 'Recommended On' %} 2 {% elif value == 'Forced On' %} 3 {% else %} 0 {% endif %}\",\"options\":[\"Free Running\",\"Forced Off\",\"Recommended On\",\"Forced On\"],\"state_topic\":\"espaltherma/sg/state\",\"value_template\":\"{% set mapper = { '0':'Free Running', '1':'Forced Off', '2':'Recommended On', '3':'Forced On' } %} {% set word = mapper[value] %} {{ word }}\"}", true);
       client.subscribe("espaltherma/sg/set");
       client.publish("espaltherma/sg/state", "0");
 #endif
+
+#ifndef PIN_THERM
+      // Publish empty retained message so discovered entities are removed from HA
+      client.publish("homeassistant/select/espAltherma/POWER", "", true);
+#endif
+
+#ifndef PIN_THERM_MAIN
+      // Publish empty retained message so discovered entities are removed from HA
+      client.publish("homeassistant/select/espAltherma/thermMain/config", "", true);
+#endif
+
+#ifndef PIN_THERM_ADD
+      // Publish empty retained message so discovered entities are removed from HA
+      client.publish("homeassistant/select/espAltherma/thermAdd/config", "", true);
+#endif
+
 #ifndef PIN_SG1
       // Publish empty retained message so discovered entities are removed from HA
       client.publish("homeassistant/select/espAltherma/sg/config", "", true);
@@ -107,6 +174,7 @@ void reconnectMqtt()
   }
 }
 
+#ifdef PIN_THERM
 void callbackTherm(byte *payload, unsigned int length)
 {
   payload[length] = '\0';
@@ -116,20 +184,22 @@ void callbackTherm(byte *payload, unsigned int length)
   if (payload[1] == 'F')
   { //turn off
     digitalWrite(PIN_THERM, HIGH);
-    saveEEPROM(HIGH);
+    EEPROM.write(EEPROM_STATE,HIGH);
+    EEPROM.commit();
     client.publish("espaltherma/STATE", "OFF", true);
-    mqttSerial.println("Turned OFF");
+    mqttSerial.print("Therm turned OFF");
   }
   else if (payload[1] == 'N')
   { //turn on
     digitalWrite(PIN_THERM, LOW);
-    saveEEPROM(LOW);
+    EEPROM.write(EEPROM_STATE,LOW);
+    EEPROM.commit();
     client.publish("espaltherma/STATE", "ON", true);
-    mqttSerial.println("Turned ON");
+    mqttSerial.print("Therm turned ON");
   }
   else if (payload[0] == 'R')//R(eset/eboot)
   {
-    mqttSerial.println("Rebooting");
+    mqttSerial.print("*** Rebooting ***");
     delay(100);
     restart_board();
   }
@@ -138,12 +208,79 @@ void callbackTherm(byte *payload, unsigned int length)
     Serial.printf("Unknown message: %s\n", payload);
   }
 }
+#endif
+
+#ifdef PIN_THERM_MAIN
+void callbackThermMain(byte *payload, unsigned int length)
+{
+  payload[length] = '\0';
+
+  // Is it ON or OFF?
+  if (payload[1] == 'F')
+  { //turn off
+    if (digitalRead(PIN_THERM_MAIN) != LOW) {
+      digitalWrite(PIN_THERM_MAIN, LOW);
+      EEPROM.write(EEPROM_STATE_MAIN,LOW);
+      EEPROM.commit();
+    }
+    mqttSerial.print("Therm-Main turned OFF");
+    client.publish("espaltherma/thermMain/state", "OFF", true);
+  }
+  else if (payload[1] == 'N')
+  { //turn on
+      if (digitalRead(PIN_THERM_MAIN) != HIGH) {
+        digitalWrite(PIN_THERM_MAIN, HIGH);
+        EEPROM.write(EEPROM_STATE_MAIN,HIGH);
+        EEPROM.commit();
+      }
+      mqttSerial.print("Therm-Main turned ON");
+      client.publish("espaltherma/thermMain/state", "ON",true);
+  }
+  else
+  {
+    Serial.printf("Unknown message: %s\n", payload);
+  }
+}
+#endif
+
+#ifdef PIN_THERM_ADD
+void callbackThermAdd(byte *payload, unsigned int length)
+{
+    payload[length] = '\0';
+
+  // Is it ON or OFF?
+  if (payload[1] == 'F')
+  { //turn off
+    if (digitalRead(PIN_THERM_ADD) != LOW) {
+      digitalWrite(PIN_THERM_ADD, LOW);
+      EEPROM.write(EEPROM_STATE_ADD, LOW);
+      EEPROM.commit();
+    }
+    mqttSerial.print("Therm-Add turned OFF");
+    client.publish("espaltherma/thermAdd/state", "OFF", true);
+  }
+  else if (payload[1] == 'N')
+  { //turn on
+    if (digitalRead(PIN_THERM_ADD) != HIGH) {
+      digitalWrite(PIN_THERM_ADD, HIGH);
+      EEPROM.write(EEPROM_STATE_ADD,HIGH);
+      EEPROM.commit();
+    }
+    mqttSerial.print("Therm-Add turned ON");
+    client.publish("espaltherma/thermAdd/state", "ON", true);
+  }
+  else
+  {
+    Serial.printf("Unknown message: %s\n", payload);
+  }
+}
+#endif
 
 #ifdef PIN_SG1
 //Smartgrid callbacks
 void callbackSg(byte *payload, unsigned int length)
 {
-  payload[length] = '\0';
+    payload[length] = '\0';
 
   if (payload[0] == '0')
   {
@@ -186,20 +323,48 @@ void callbackSg(byte *payload, unsigned int length)
 
 void callback(char *topic, byte *payload, unsigned int length)
 {
-  Serial.printf("Message arrived [%s] : %s\n", topic, payload);
+  char buf[16]= "";
+  const int cnt= min(length, sizeof(buf)-1);
+  strncpy(buf, (const char*)payload, cnt);
+  buf[cnt]= 0;
 
-  if (strcmp(topic, "espaltherma/POWER") == 0)
+  char tp[100];
+  tp[99]='\0';
+  strcpy(tp, topic);
+
+  // mqttSerial.printf("Message arrived [%s, %i]: %s", topic, length, buf);
+  
+#ifdef PIN_THERM_MAIN
+  if (strcmp(tp, "espaltherma/thermMain/set") == 0)
   {
-    callbackTherm(payload, length);
-  }
-#ifdef PIN_SG1
-  else if (strcmp(topic, "espaltherma/sg/set") == 0)
-  {
-    callbackSg(payload, length);
+    callbackThermMain(payload, length);
+    return;
   }
 #endif
-  else
+
+#ifdef PIN_THERM_ADD
+  if (strcmp(tp, "espaltherma/thermAdd/set") == 0)
   {
-    Serial.printf("Unknown topic: %s\n", topic);
+    callbackThermAdd(payload, length);
+    return;
   }
+#endif
+
+#ifdef PIN_THERM
+  if (strcmp(tp, "espaltherma/POWER") == 0)
+  {
+    callbackTherm(payload, length);
+    return;
+  }
+#endif
+
+#ifdef PIN_SG1
+  if (strcmp(tp, "espaltherma/sg/set") == 0)
+  {
+    callbackSg(payload, length);
+    return;
+  }
+#endif
+  
+  mqttSerial.printf("Unknown topic: %s", tp);
 }

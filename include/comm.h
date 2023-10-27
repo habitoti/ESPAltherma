@@ -24,12 +24,14 @@ unsigned char getCRC(unsigned char *src, int len)
 
 void logBuffer(unsigned char *buffer, size_t len)
 {
+#ifdef LOG_DEBUG
   char bufflog[250] = {0};
   for (size_t i = 0; i < len; i++)
   {
     sprintf(bufflog + i * 5, "0x%02x ", buffer[i]);
   }
   mqttSerial.print(bufflog);
+#endif
 }
 
 int get_reply_len(char regID, char protocol='I')
@@ -72,7 +74,10 @@ bool queryRegistry(char regID, unsigned char *buffer, char protocol='I')
     queryLength = 3;
   }
 
+#ifdef LOG_DEBUG
   mqttSerial.printf("Querying register 0x%02x... ", regID);
+#endif
+
   //Sending command to serial
   MySerial.flush(SERIAL_FLUSH_TX_ONLY); //Prevent possible pending info on the read
   MySerial.write((uint8_t*) prep, queryLength);

@@ -159,7 +159,9 @@ void initRegistries(){
   {
     if (!contains(registryIDs, sizeof(registryIDs), label.registryID))
     {
+#ifdef LOG_DEBUG
       mqttSerial.printf("Adding registry 0x%2x to be queried.\n", label.registryID);
+#endif
       registryIDs[i++] = label.registryID;
     }
   }
@@ -198,8 +200,19 @@ void setup()
   Serial.begin(115200);
   setupScreen();
   MySerial.begin(9600, SERIAL_CONFIG, RX_PIN, TX_PIN);
+
+#ifdef PIN_THERM
   pinMode(PIN_THERM, OUTPUT);
   digitalWrite(PIN_THERM, HIGH);
+#endif
+
+#ifdef PIN_THERM_MAIN
+  pinMode(PIN_THERM_MAIN, OUTPUT);
+#endif
+
+#ifdef PIN_THERM_ADD
+  pinMode(PIN_THERM_ADD, OUTPUT);
+#endif
 
 #ifdef PIN_SG1
   //Smartgrid pins - Set first to the inactive state, before configuring as outputs (avoid false triggering when initializing)
@@ -216,6 +229,7 @@ void setup()
 
   EEPROM.begin(10);
   readEEPROM();//Restore previous state
+
   mqttSerial.print("Setting up wifi...");
   setup_wifi();
   ArduinoOTA.setHostname("ESPAltherma");
@@ -236,10 +250,20 @@ void setup()
   mqttSerial.print("Connecting to MQTT server...");
   mqttSerial.begin(&client, "espaltherma/log");
   reconnectMqtt();
-  mqttSerial.println("OK!");
+  mqttSerial.print("OK!");
 
   initRegistries();
   mqttSerial.print("ESPAltherma started!");
+
+#ifdef PIN_THERM_MAIN
+  client.publish("espaltherma/thermMain/state", digitalRead(PIN_THERM_MAIN) == LOW ? "OFF" : "ON", true);
+  mqttSerial.printf("Publishing initial thermMain state: %s", (digitalRead(PIN_THERM_MAIN) == LOW) ? "OFF" : "ON");
+#endif
+
+#ifdef PIN_THERM_ADD
+  client.publish("espaltherma/thermAdd/state", digitalRead(PIN_THERM_ADD) == LOW ? "OFF" : "ON", true);
+  mqttSerial.printf("Publishing initial thermAdd state: %s", (digitalRead(PIN_THERM_ADD) == LOW) ? "OFF" : "ON");
+#endif
 }
 
 void waitLoop(uint ms){
@@ -268,7 +292,7 @@ void loop()
     int tries = 0;
     while (!queryRegistry(registryIDs[i], buff, PROTOCOL) && tries++ < 3)
     {
-      mqttSerial.println("Retrying...");
+      mqttSerial.print("Retrying...");
       waitLoop(1000);
     }
     unsigned char receivedRegistryID = PROTOCOL == 'S' ? buff[0] : buff[1];
@@ -280,6 +304,10 @@ void loop()
     }
   }
   sendValues();//Send the full json message
+
+#ifdef LOG_DEBUG
   mqttSerial.printf("Done. Waiting %ld ms...", FREQUENCY - millis() + start);
+#endif
+
   waitLoop(FREQUENCY - millis() + start);
 }

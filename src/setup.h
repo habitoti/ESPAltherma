@@ -1,7 +1,7 @@
 //Setup your credentials and mqtt info here:
 //only change the value between the " " leave the rest of the line untouched.
-#define WIFI_SSID "SSID"//**Your SSID here**
-#define WIFI_PWD "password"//**Your password here** leave empty if open (bad!)
+#define WIFI_SSID "bhttr"//**Your SSID here**
+#define WIFI_PWD "sn00py4wlan"//**Your password here** leave empty if open (bad!)
 
 //Uncomment this to set a static IP instead of DHCP for the ESP (Separate by commas instead of dots)
 //#define WIFI_IP 192, 168, 0, 5
@@ -10,9 +10,9 @@
 //#define WIFI_PRIMARY_DNS 8, 8, 8, 8     //optional
 //#define WIFI_SECONDARY_DNS 8, 8, 4, 4   //optional
 
-#define MQTT_SERVER "192.168.1.4"//**IP address here of your MQTT server**
-#define MQTT_USERNAME ""//leave empty if not set (bad!)
-#define MQTT_PASSWORD ""//leave empty if not set (bad!)
+#define MQTT_SERVER "192.168.1.115"//**IP address here of your MQTT server**
+#define MQTT_USERNAME "mqtt"//leave empty if not set (bad!)
+#define MQTT_PASSWORD "Sn00py4mqtt"//leave empty if not set (bad!)
 #define MQTT_PORT 1883
 
 #define FREQUENCY 30000 //query values every 30 sec
@@ -27,7 +27,10 @@
 #define TX_PIN    17// Pin connected to the RX pin of X10A
 #endif
 
-#define PIN_THERM 0// Pin connected to the thermostat relay (normally open)
+// #define PIN_THERM 0// Pin connected to the thermostat relay (normally open)
+
+#define PIN_THERM_MAIN 32 // Pin connected to the thermostat main relay (normally open)
+#define PIN_THERM_ADD 33 // Pin connected to the thermostat add relay (normally open)
 
 //Smart grid control - Optional:
 //Uncomment and set to enable SG mqtt functions
@@ -35,8 +38,8 @@
 //#define PIN_SG2 33// Pin connected to dry contact SG 2 relay (normally open)
 // Define if your SG relay board is Low or High triggered (signal pins)
 // Only uncomment one of them
-#define SG_RELAY_HIGH_TRIGGER
-//#define SG_RELAY_LOW_TRIGGER
+//#define SG_RELAY_HIGH_TRIGGER
+#define SG_RELAY_LOW_TRIGGER
 
 // DO NOT CHANGE: Defines the SG active/inactive relay states, according to the definition of the trigger status
 #if defined(SG_RELAY_LOW_TRIGGER)
@@ -69,15 +72,15 @@
 //
 //Suported locales: French, German, Spanish.
 
-//#include "def/ALTHERMA(BIZONE_CB_04-08KW).h"
+#include "def/German/ALTHERMA(BIZONE_CB_04-08KW).h"
 //#include "def/ALTHERMA(BIZONE_CB_11-16KW).h"
 //#include "def/ALTHERMA(GSHP).h"
 //#include "def/ALTHERMA(GSHP2).h"
 //#include "def/ALTHERMA(HPSU6_ULTRA).h"
-//#include "def/ALTHERMA(HYBRID).h"
+//#include "def/German/ALTHERMA(HYBRID).h"
 //#include "def/ALTHERMA(LT-D7_E_BML).h"
 //#include "def/ALTHERMA(LT_11-16KW_HYDROSPLIT_HYDRO_UNIT).h"
-//#include "def/ALTHERMA(LT_CA_CB_04-08KW).h"
+//#include "def/German/ALTHERMA(LT_CA_CB_04-08KW).h"
 //#include "def/ALTHERMA(LT_CA_CB_11-16KW).h"
 //#include "def/ALTHERMA(LT_DA_04-08KW).h"
 //#include "def/ALTHERMA(LT_DA_PAIR_BML).h"
